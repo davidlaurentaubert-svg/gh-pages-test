@@ -45,7 +45,8 @@ function askPassword() {
     return true;
   } else {
     alert("Incorrect password. Access denied.");
-    window.location.href = "about:blank";
+    // Redirection remplacée par message sur la page
+    document.body.innerHTML = "<h2>Access denied ❌</h2>";
     return false;
   }
 }

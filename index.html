@@ -6,7 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 90vh; width: 100%; }
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #password-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f0f0f0;
+    }
+    #password-container input {
+      padding: 8px;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    #password-container button {
+      padding: 8px 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #map { height: 90vh; width: 100%; display: none; }
     #region-controls {
       position: absolute;
       top: 10px;
@@ -16,6 +35,7 @@
       padding: 5px 10px;
       border-radius: 5px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      display: none;
     }
     #region-controls button, #region-controls select {
       margin-right: 5px;
@@ -31,32 +51,19 @@
       border-radius: 5px;
       font-weight: bold;
       font-size: 16px;
+      display: none;
     }
   </style>
 </head>
 <body>
 
-<script>
-const PASSWORD = "Catering2025";
+<div id="password-container">
+  <h2>Enter password to access Catering Map</h2>
+  <input type="password" id="password-input" placeholder="Password">
+  <button id="password-submit">Submit</button>
+  <p id="password-error" style="color:red; display:none;">Incorrect password ❌</p>
+</div>
 
-function askPassword() {
-  const userInput = prompt("Enter password to access the Catering Map:");
-  if(userInput === PASSWORD){
-    return true;
-  } else {
-    alert("Incorrect password. Access denied.");
-    // Redirection remplacée par message sur la page
-    document.body.innerHTML = "<h2>Access denied ❌</h2>";
-    return false;
-  }
-}
-
-if(!askPassword()){
-  throw new Error("Access denied");
-}
-</script>
-
-<div id="map"></div>
 <div id="map-title">Catering Map</div>
 <div id="region-controls">
   <button id="eu-btn">EU</button>
@@ -71,154 +78,151 @@ if(!askPassword()){
   <button onclick="flyToRegion('APAC')">APAC</button>
 </div>
 
+<div id="map"></div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-const map = L.map('map').setView([51.5, -0.6], 4);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+const PASSWORD = "Catering2025";
 
-// --- Icônes
-const airportIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/7893/7893979.png', iconSize:[50,50], iconAnchor:[16,32]});
-const catererIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940981.png', iconSize:[40,40], iconAnchor:[14,28]});
-
-// --- Rayon pixel fixe
-const pixelRadius = 120;
-
-// --- Contrôles régions
-let euDropdownVisible = false;
-document.getElementById('eu-btn').onclick = () => {
-  const dropdown = document.getElementById('eu-select');
-  if(!euDropdownVisible){
-    dropdown.style.display = 'inline-block';
-    map.flyTo([50, 10], 5);
-    euDropdownVisible = true;
+document.getElementById('password-submit').onclick = () => {
+  const input = document.getElementById('password-input').value;
+  if(input === PASSWORD){
+    // Masquer le formulaire
+    document.getElementById('password-container').style.display = 'none';
+    // Afficher la carte et les contrôles
+    document.getElementById('map').style.display = 'block';
+    document.getElementById('map-title').style.display = 'block';
+    document.getElementById('region-controls').style.display = 'block';
+    initMap(); // Initialise la carte
   } else {
-    dropdown.style.display = 'none';
-    dropdown.value = "";
-    euDropdownVisible = false;
+    document.getElementById('password-error').style.display = 'block';
   }
 };
 
-function flyToEU(country){
-  switch(country){
-    case 'UK': map.flyTo([54, -2], 6); break;
-    case 'France': map.flyTo([46.5, 2], 6); break;
-    case 'Italy': map.flyTo([42.5, 12], 6); break;
-    case 'Spain': map.flyTo([40, -3], 6); break;
+function initMap(){
+  const map = L.map('map').setView([51.5, -0.6], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+  // Icônes
+  const airportIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/7893/7893979.png', iconSize:[50,50], iconAnchor:[16,32]});
+  const catererIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940981.png', iconSize:[40,40], iconAnchor:[14,28]});
+  const pixelRadius = 120;
+
+  // Contrôles régions
+  let euDropdownVisible = false;
+  document.getElementById('eu-btn').onclick = () => {
+    const dropdown = document.getElementById('eu-select');
+    if(!euDropdownVisible){
+      dropdown.style.display = 'inline-block';
+      map.flyTo([50, 10], 5);
+      euDropdownVisible = true;
+    } else {
+      dropdown.style.display = 'none';
+      dropdown.value = "";
+      euDropdownVisible = false;
+    }
+  };
+
+  window.flyToEU = (country)=>{
+    switch(country){
+      case 'UK': map.flyTo([54, -2], 6); break;
+      case 'France': map.flyTo([46.5, 2], 6); break;
+      case 'Italy': map.flyTo([42.5, 12], 6); break;
+      case 'Spain': map.flyTo([40, -3], 6); break;
+    }
   }
-}
 
-function flyToRegion(region){
-  document.getElementById('eu-select').style.display = 'none';
-  document.getElementById('eu-select').value = "";
-  euDropdownVisible = false;
-  
-  if(region==='US') map.flyTo([39, -98], 5);
-  else if(region==='APAC') map.flyTo([0, 120], 4);
-}
+  window.flyToRegion = (region)=>{
+    document.getElementById('eu-select').style.display = 'none';
+    document.getElementById('eu-select').value = "";
+    euDropdownVisible = false;
+    
+    if(region==='US') map.flyTo([39, -98], 5);
+    else if(region==='APAC') map.flyTo([0, 120], 4);
+  }
 
-// --- Chargement Google Sheet
-const SHEET_ID = "1r1RDAQkpflVXsEpt_Xt1X5qWaFueY9ulRI9lZ7on-2Y";
-const SHEET_NAME = "Sheet1";
-const API_URL = `https://opensheet.elk.sh/${SHEET_ID}/${SHEET_NAME}`;
+  // Chargement Google Sheet
+  const SHEET_ID = "1r1RDAQkpflVXsEpt_Xt1X5qWaFueY9ulRI9lZ7on-2Y";
+  const SHEET_NAME = "Sheet1";
+  const API_URL = `https://opensheet.elk.sh/${SHEET_ID}/${SHEET_NAME}`;
 
-fetch(API_URL)
-  .then(response => response.json())
-  .then(rows => {
-    const airports = {};
-    rows.forEach(r => {
-      const name = r["Airport Name"];
-      if(!airports[name]){
-        airports[name] = {
-          name,
-          lat: parseFloat(r["Latitude"]),
-          lon: parseFloat(r["Longitude"]),
-          caterers: []
-        };
-      }
-      airports[name].caterers.push({
-        name: r["Caterer Name"],
-        url: r["Caterer URL"],
-        email: r["Caterer Email"],
-        phone: r["Caterer Phone"]
+  fetch(API_URL)
+    .then(response => response.json())
+    .then(rows => {
+      const airports = {};
+      rows.forEach(r => {
+        const name = r["Airport Name"];
+        if(!airports[name]){
+          airports[name] = { name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), caterers: [] };
+        }
+        airports[name].caterers.push({
+          name: r["Caterer Name"], url: r["Caterer URL"], email: r["Caterer Email"], phone: r["Caterer Phone"]
+        });
       });
-    });
 
-    let currentlyVisible = null;
+      let currentlyVisible = null;
 
-    Object.values(airports).forEach(airport => {
-      const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
-        .addTo(map)
-        .bindTooltip(airport.name, {direction:"top", offset:[0,-10]});
+      Object.values(airports).forEach(airport => {
+        const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
+          .addTo(map)
+          .bindTooltip(airport.name, {direction:"top", offset:[0,-10]});
 
-      let catererMarkers = [];
-      let catererLines = [];
-      let visible = false;
+        let catererMarkers = [];
+        let catererLines = [];
+        let visible = false;
 
-      function updatePositions(){
-        const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
-        const angleStep = (2 * Math.PI) / airport.caterers.length;
-        airport.caterers.forEach((c,i)=>{
-          const angle = i * angleStep;
-          const x = airportPoint.x + pixelRadius*Math.cos(angle);
-          const y = airportPoint.y + pixelRadius*Math.sin(angle);
-          const latlng = map.layerPointToLatLng([x,y]);
-          catererMarkers[i].setLatLng(latlng);
-          catererLines[i].setLatLngs([[airport.lat, airport.lon],[latlng.lat, latlng.lng]]);
-        });
-      }
-
-      function hideCaterers(){
-        catererMarkers.forEach(m=>map.removeLayer(m));
-        catererLines.forEach(l=>map.removeLayer(l));
-        catererMarkers=[];
-        catererLines=[];
-        map.off('zoom', updatePositions);
-        visible=false;
-        if(currentlyVisible===airport) currentlyVisible=null;
-      }
-
-      function toggleCaterers(){
-        // Si on clique sur le même aéroport déjà ouvert → on ferme
-        if (currentlyVisible === airport) {
-          hideCaterers();
-          return;
-        }
-
-        // Si un autre aéroport est ouvert → on le ferme
-        if (currentlyVisible && currentlyVisible !== airport) {
-          currentlyVisible.hideCaterers();
-        }
-
-        // Sinon, on affiche les caterers
-        const angleStep = (2 * Math.PI) / airport.caterers.length;
-        airport.caterers.forEach((c, i) => {
-          const angle = i * angleStep;
+        function updatePositions(){
           const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
-          const x = airportPoint.x + pixelRadius * Math.cos(angle);
-          const y = airportPoint.y + pixelRadius * Math.sin(angle);
-          const latlng = map.layerPointToLatLng([x, y]);
-          const marker = L.marker(latlng, {icon: catererIcon, title: c.name})
-            .addTo(map)
-            .bindPopup(`<b>${c.name}</b><br>🌐 <a href="${c.url}" target="_blank">${c.url}</a><br>💻 <a href="mailto:${c.email}">${c.email}</a><br>📞 <a href="tel:${c.phone}">${c.phone}</a>`)
-            .bindTooltip(c.name, {direction:"top", offset:[0,-10]});
-          const line = L.polyline([[airport.lat, airport.lon], [latlng.lat, latlng.lng]], {
-            color: 'black', dashArray: '4,4', weight: 1, opacity: 0.7
-          }).addTo(map);
-          catererMarkers.push(marker);
-          catererLines.push(line);
-        });
+          const angleStep = (2 * Math.PI) / airport.caterers.length;
+          airport.caterers.forEach((c,i)=>{
+            const angle = i * angleStep;
+            const x = airportPoint.x + pixelRadius*Math.cos(angle);
+            const y = airportPoint.y + pixelRadius*Math.sin(angle);
+            const latlng = map.layerPointToLatLng([x,y]);
+            catererMarkers[i].setLatLng(latlng);
+            catererLines[i].setLatLngs([[airport.lat, airport.lon],[latlng.lat, latlng.lng]]);
+          });
+        }
 
-        map.on('zoom', updatePositions);
-        visible = true;
-        currentlyVisible = airport;
-      }
+        function hideCaterers(){
+          catererMarkers.forEach(m=>map.removeLayer(m));
+          catererLines.forEach(l=>map.removeLayer(l));
+          catererMarkers=[]; catererLines=[];
+          map.off('zoom', updatePositions);
+          visible=false;
+          if(currentlyVisible===airport) currentlyVisible=null;
+        }
 
-      airport.hideCaterers = hideCaterers;
-      airportMarker.on('click', toggleCaterers);
-    });
-  })
-  .catch(err=>console.error("Error loading sheet:", err));
+        function toggleCaterers(){
+          if (currentlyVisible === airport) { hideCaterers(); return; }
+          if (currentlyVisible && currentlyVisible !== airport) { currentlyVisible.hideCaterers(); }
 
+          const angleStep = (2 * Math.PI) / airport.caterers.length;
+          airport.caterers.forEach((c, i) => {
+            const angle = i * angleStep;
+            const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
+            const x = airportPoint.x + pixelRadius * Math.cos(angle);
+            const y = airportPoint.y + pixelRadius * Math.sin(angle);
+            const latlng = map.layerPointToLatLng([x, y]);
+            const marker = L.marker(latlng, {icon: catererIcon, title: c.name})
+              .addTo(map)
+              .bindPopup(`<b>${c.name}</b><br>🌐 <a href="${c.url}" target="_blank">${c.url}</a><br>💻 <a href="mailto:${c.email}">${c.email}</a><br>📞 <a href="tel:${c.phone}">${c.phone}</a>`)
+              .bindTooltip(c.name, {direction:"top", offset:[0,-10]});
+            const line = L.polyline([[airport.lat, airport.lon], [latlng.lat, latlng.lng]], {color:'black', dashArray:'4,4', weight:1, opacity:0.7}).addTo(map);
+            catererMarkers.push(marker); catererLines.push(line);
+          });
+
+          map.on('zoom', updatePositions);
+          visible = true;
+          currentlyVisible = airport;
+        }
+
+        airport.hideCaterers = hideCaterers;
+        airportMarker.on('click', toggleCaterers);
+      });
+    })
+    .catch(err=>console.error("Error loading sheet:", err));
+}
 </script>
 </body>
 </html>

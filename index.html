@@ -59,8 +59,10 @@
 
 <div id="password-container">
   <h2>Enter password to access Catering Map</h2>
-  <input type="password" id="password-input" placeholder="Password">
-  <button id="password-submit">Submit</button>
+  <form id="password-form">
+    <input type="password" id="password-input" placeholder="Password" required>
+    <button type="submit">Submit</button>
+  </form>
   <p id="password-error" style="color:red; display:none;">Incorrect password ❌</p>
 </div>
 
@@ -84,20 +86,19 @@
 <script>
 const PASSWORD = "Catering2025";
 
-document.getElementById('password-submit').onclick = () => {
+document.getElementById('password-form').addEventListener('submit', function(e){
+  e.preventDefault(); // Empêche le rechargement de la page
   const input = document.getElementById('password-input').value;
   if(input === PASSWORD){
-    // Masquer le formulaire
     document.getElementById('password-container').style.display = 'none';
-    // Afficher la carte et les contrôles
     document.getElementById('map').style.display = 'block';
     document.getElementById('map-title').style.display = 'block';
     document.getElementById('region-controls').style.display = 'block';
-    initMap(); // Initialise la carte
+    initMap();
   } else {
     document.getElementById('password-error').style.display = 'block';
   }
-};
+});
 
 function initMap(){
   const map = L.map('map').setView([51.5, -0.6], 4);

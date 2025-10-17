@@ -1,10 +1,223 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>GitHub Pages Test</title>
+  <title>Catering Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 90vh; width: 100%; }
+    #region-controls {
+      position: absolute;
+      top: 10px;
+      right: 120px;
+      z-index: 1000;
+      background: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+    #region-controls button, #region-controls select {
+      margin-right: 5px;
+    }
+    #map-title {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255,255,255,0.8);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 16px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Hello GitHub Pages 👋</h1>
-  <p>If you see this, your Pages setup works!</p>
+
+<script>
+const PASSWORD = "Catering2025";
+
+function askPassword() {
+  const userInput = prompt("Enter password to access the Catering Map:");
+  if(userInput === PASSWORD){
+    return true;
+  } else {
+    alert("Incorrect password. Access denied.");
+    window.location.href = "about:blank";
+    return false;
+  }
+}
+
+if(!askPassword()){
+  throw new Error("Access denied");
+}
+</script>
+
+<div id="map"></div>
+<div id="map-title">Catering Map</div>
+<div id="region-controls">
+  <button id="eu-btn">EU</button>
+  <select id="eu-select" style="display:none;" onchange="flyToEU(this.value)">
+    <option value="">Select a country</option>
+    <option value="UK">UK</option>
+    <option value="France">France</option>
+    <option value="Italy">Italy</option>
+    <option value="Spain">Spain</option>
+  </select>
+  <button onclick="flyToRegion('US')">US</button>
+  <button onclick="flyToRegion('APAC')">APAC</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([51.5, -0.6], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+// --- Icônes
+const airportIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/7893/7893979.png', iconSize:[50,50], iconAnchor:[16,32]});
+const catererIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940981.png', iconSize:[40,40], iconAnchor:[14,28]});
+
+// --- Rayon pixel fixe
+const pixelRadius = 120;
+
+// --- Contrôles régions
+let euDropdownVisible = false;
+document.getElementById('eu-btn').onclick = () => {
+  const dropdown = document.getElementById('eu-select');
+  if(!euDropdownVisible){
+    dropdown.style.display = 'inline-block';
+    map.flyTo([50, 10], 5);
+    euDropdownVisible = true;
+  } else {
+    dropdown.style.display = 'none';
+    dropdown.value = "";
+    euDropdownVisible = false;
+  }
+};
+
+function flyToEU(country){
+  switch(country){
+    case 'UK': map.flyTo([54, -2], 6); break;
+    case 'France': map.flyTo([46.5, 2], 6); break;
+    case 'Italy': map.flyTo([42.5, 12], 6); break;
+    case 'Spain': map.flyTo([40, -3], 6); break;
+  }
+}
+
+function flyToRegion(region){
+  document.getElementById('eu-select').style.display = 'none';
+  document.getElementById('eu-select').value = "";
+  euDropdownVisible = false;
+  
+  if(region==='US') map.flyTo([39, -98], 5);
+  else if(region==='APAC') map.flyTo([0, 120], 4);
+}
+
+// --- Chargement Google Sheet
+const SHEET_ID = "1r1RDAQkpflVXsEpt_Xt1X5qWaFueY9ulRI9lZ7on-2Y";
+const SHEET_NAME = "Sheet1";
+const API_URL = `https://opensheet.elk.sh/${SHEET_ID}/${SHEET_NAME}`;
+
+fetch(API_URL)
+  .then(response => response.json())
+  .then(rows => {
+    const airports = {};
+    rows.forEach(r => {
+      const name = r["Airport Name"];
+      if(!airports[name]){
+        airports[name] = {
+          name,
+          lat: parseFloat(r["Latitude"]),
+          lon: parseFloat(r["Longitude"]),
+          caterers: []
+        };
+      }
+      airports[name].caterers.push({
+        name: r["Caterer Name"],
+        url: r["Caterer URL"],
+        email: r["Caterer Email"],
+        phone: r["Caterer Phone"]
+      });
+    });
+
+    let currentlyVisible = null;
+
+    Object.values(airports).forEach(airport => {
+      const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
+        .addTo(map)
+        .bindTooltip(airport.name, {direction:"top", offset:[0,-10]});
+
+      let catererMarkers = [];
+      let catererLines = [];
+      let visible = false;
+
+      function updatePositions(){
+        const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
+        const angleStep = (2 * Math.PI) / airport.caterers.length;
+        airport.caterers.forEach((c,i)=>{
+          const angle = i * angleStep;
+          const x = airportPoint.x + pixelRadius*Math.cos(angle);
+          const y = airportPoint.y + pixelRadius*Math.sin(angle);
+          const latlng = map.layerPointToLatLng([x,y]);
+          catererMarkers[i].setLatLng(latlng);
+          catererLines[i].setLatLngs([[airport.lat, airport.lon],[latlng.lat, latlng.lng]]);
+        });
+      }
+
+      function hideCaterers(){
+        catererMarkers.forEach(m=>map.removeLayer(m));
+        catererLines.forEach(l=>map.removeLayer(l));
+        catererMarkers=[];
+        catererLines=[];
+        map.off('zoom', updatePositions);
+        visible=false;
+        if(currentlyVisible===airport) currentlyVisible=null;
+      }
+
+      function toggleCaterers(){
+        // Si on clique sur le même aéroport déjà ouvert → on ferme
+        if (currentlyVisible === airport) {
+          hideCaterers();
+          return;
+        }
+
+        // Si un autre aéroport est ouvert → on le ferme
+        if (currentlyVisible && currentlyVisible !== airport) {
+          currentlyVisible.hideCaterers();
+        }
+
+        // Sinon, on affiche les caterers
+        const angleStep = (2 * Math.PI) / airport.caterers.length;
+        airport.caterers.forEach((c, i) => {
+          const angle = i * angleStep;
+          const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
+          const x = airportPoint.x + pixelRadius * Math.cos(angle);
+          const y = airportPoint.y + pixelRadius * Math.sin(angle);
+          const latlng = map.layerPointToLatLng([x, y]);
+          const marker = L.marker(latlng, {icon: catererIcon, title: c.name})
+            .addTo(map)
+            .bindPopup(`<b>${c.name}</b><br>🌐 <a href="${c.url}" target="_blank">${c.url}</a><br>💻 <a href="mailto:${c.email}">${c.email}</a><br>📞 <a href="tel:${c.phone}">${c.phone}</a>`)
+            .bindTooltip(c.name, {direction:"top", offset:[0,-10]});
+          const line = L.polyline([[airport.lat, airport.lon], [latlng.lat, latlng.lng]], {
+            color: 'black', dashArray: '4,4', weight: 1, opacity: 0.7
+          }).addTo(map);
+          catererMarkers.push(marker);
+          catererLines.push(line);
+        });
+
+        map.on('zoom', updatePositions);
+        visible = true;
+        currentlyVisible = airport;
+      }
+
+      airport.hideCaterers = hideCaterers;
+      airportMarker.on('click', toggleCaterers);
+    });
+  })
+  .catch(err=>console.error("Error loading sheet:", err));
+
+</script>
 </body>
 </html>

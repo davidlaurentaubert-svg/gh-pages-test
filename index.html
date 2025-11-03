@@ -43,14 +43,12 @@
       font-size: 16px;
     }
   </style>
-  <!-- PapaParse pour parser le CSV -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
 <script>
 const PASSWORD = "Catering2025";
-
 function askPassword() {
   const userInput = prompt("Enter password to access the map:");
   if(userInput === PASSWORD) return true;
@@ -58,7 +56,6 @@ function askPassword() {
   window.location.href = "about:blank";
   return false;
 }
-
 if(!askPassword()) throw new Error("Access denied");
 </script>
 
@@ -123,7 +120,6 @@ function flyToRegion(region){
   document.getElementById('eu-select').style.display='none';
   document.getElementById('eu-select').value="";
   euDropdownVisible=false;
-  
   if(region==='US') map.flyTo([39,-98],5);
   else if(region==='APAC') map.flyTo([0,120],4);
 }
@@ -179,14 +175,15 @@ function loadType(type){
         let visible=false;
 
         function updatePositions(){
+          if(markers.length===0) return; // <-- aucun marker, rien à déplacer
           const airportPoint = map.latLngToLayerPoint([airport.lat,airport.lon]);
-          const angleStep = (2*Math.PI)/airport.markers.length;
-          airport.markers.forEach((m,i)=>{
+          const angleStep = (2*Math.PI)/markers.length;
+          markers.forEach((m,i)=>{
             const angle = i*angleStep;
             const x = airportPoint.x + pixelRadius*Math.cos(angle);
             const y = airportPoint.y + pixelRadius*Math.sin(angle);
             const latlng = map.layerPointToLatLng([x,y]);
-            markers[i].setLatLng(latlng);
+            m.setLatLng(latlng);
             lines[i].setLatLngs([[airport.lat,airport.lon],[latlng.lat,latlng.lng]]);
           });
         }
@@ -195,6 +192,8 @@ function loadType(type){
           if(currentlyVisible && currentlyVisible!==airport){
             currentlyVisible.hideMarkers();
           }
+          if(airport.markers.length===0) return; // <-- pas de markers, ne rien afficher
+
           if(!visible){
             const angleStep = (2*Math.PI)/airport.markers.length;
             airport.markers.forEach((m,i)=>{
@@ -214,11 +213,13 @@ function loadType(type){
                 .addTo(map)
                 .bindPopup(popupContent)
                 .bindTooltip(m.name,{direction:"top",offset:[0,-10]});
+
               const line = L.polyline([[airport.lat,airport.lon],[latlng.lat,latlng.lng]],{color:'black',dashArray:'4,4',weight:1,opacity:0.7}).addTo(map);
+
               markers.push(marker);
               lines.push(line);
             });
-            map.on('zoom',updatePositions);
+            map.on('zoom', updatePositions);
             visible=true;
             currentlyVisible=airport;
           } else {

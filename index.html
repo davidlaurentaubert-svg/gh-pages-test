@@ -147,7 +147,8 @@ function loadType(type){
   }
   airports = {}; // réinitialise la structure
 
-  const API_URL = `/.netlify/functions/get-sheet-data?type=${type}`;
+  const SHEET_ID = "1r1RDAQkpflVXsEpt_Xt1X5qWaFueY9ulRI9lZ7on-2Y";
+  const API_URL = `https://opensheet.elk.sh/${SHEET_ID}/${type}`;
 
   fetch(API_URL)
     .then(res => res.json())
@@ -180,7 +181,7 @@ function loadType(type){
         }
       });
 
-      // --- Création des markers d'aéroport et des markers Caterers/Reps
+      // --- Création des markers d'aéroport
       Object.values(airports).forEach(airport => {
         const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
           .addTo(map)
@@ -254,7 +255,7 @@ function loadType(type){
         airportMarker.on('click', toggleMarkers);
       });
     })
-    .catch(err=>console.error("Error loading sheet via Netlify Function:", err));
+    .catch(err=>console.error("Error loading sheet:", err));
 }
 
 // --- Charger par défaut les Caterers

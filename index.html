@@ -43,6 +43,8 @@
       font-size: 16px;
     }
   </style>
+  <!-- PapaParse pour parser le CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
@@ -51,18 +53,13 @@ const PASSWORD = "Catering2025";
 
 function askPassword() {
   const userInput = prompt("Enter password to access the map:");
-  if(userInput === PASSWORD){
-    return true;
-  } else {
-    alert("Incorrect password. Access denied.");
-    window.location.href = "about:blank";
-    return false;
-  }
+  if(userInput === PASSWORD) return true;
+  alert("Incorrect password. Access denied.");
+  window.location.href = "about:blank";
+  return false;
 }
 
-if(!askPassword()){
-  throw new Error("Access denied");
-}
+if(!askPassword()) throw new Error("Access denied");
 </script>
 
 <div id="map"></div>
@@ -91,19 +88,20 @@ if(!askPassword()){
 const map = L.map('map').setView([51.5, -0.6], 4);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-// --- Icônes
-const airportIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/7893/7893979.png', iconSize:[50,50], iconAnchor:[16,32]});
-const catererIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940981.png', iconSize:[40,40], iconAnchor:[14,28]});
-const repIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/256/6429/6429949.png', iconSize:[40,40], iconAnchor:[14,28]});
+const airportIcon = L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/7893/7893979.png',iconSize:[50,50],iconAnchor:[16,32]});
+const catererIcon = L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/1940/1940981.png',iconSize:[40,40],iconAnchor:[14,28]});
+const repIcon = L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/256/6429/6429949.png',iconSize:[40,40],iconAnchor:[14,28]});
 
 const pixelRadius = 120;
 let euDropdownVisible = false;
+let airports = {};
+let currentlyVisible = null;
 
 document.getElementById('eu-btn').onclick = () => {
   const dropdown = document.getElementById('eu-select');
   if(!euDropdownVisible){
     dropdown.style.display = 'inline-block';
-    map.flyTo([50, 10], 5);
+    map.flyTo([50,10],5);
     euDropdownVisible = true;
   } else {
     dropdown.style.display = 'none';
@@ -114,152 +112,137 @@ document.getElementById('eu-btn').onclick = () => {
 
 function flyToEU(country){
   switch(country){
-    case 'UK': map.flyTo([54, -2], 6); break;
-    case 'France': map.flyTo([46.5, 2], 6); break;
-    case 'Italy': map.flyTo([42.5, 12], 6); break;
-    case 'Spain': map.flyTo([40, -3], 6); break;
+    case 'UK': map.flyTo([54,-2],6); break;
+    case 'France': map.flyTo([46.5,2],6); break;
+    case 'Italy': map.flyTo([42.5,12],6); break;
+    case 'Spain': map.flyTo([40,-3],6); break;
   }
 }
 
 function flyToRegion(region){
-  document.getElementById('eu-select').style.display = 'none';
-  document.getElementById('eu-select').value = "";
-  euDropdownVisible = false;
+  document.getElementById('eu-select').style.display='none';
+  document.getElementById('eu-select').value="";
+  euDropdownVisible=false;
   
-  if(region==='US') map.flyTo([39, -98], 5);
-  else if(region==='APAC') map.flyTo([0, 120], 4);
+  if(region==='US') map.flyTo([39,-98],5);
+  else if(region==='APAC') map.flyTo([0,120],4);
 }
 
-// --- Gestion des markers
-let airports = {}; 
-let currentlyVisible = null;
-
-async function loadType(type){
-  // Supprime tous les markers existants
+function loadType(type){
   if(currentlyVisible){
-    Object.values(airports).forEach(a => a.hideMarkers && a.hideMarkers());
-    currentlyVisible = null;
+    Object.values(airports).forEach(a=>a.hideMarkers && a.hideMarkers());
+    currentlyVisible=null;
   }
 
   const API_URL = `/.netlify/functions/get-sheet-data?type=${type}`;
 
-  try {
-    const res = await fetch(API_URL);
-    const rows = await res.json();
+  fetch(API_URL)
+    .then(res=>res.text())
+    .then(csvText=>{
+      const rows = Papa.parse(csvText,{header:true}).data;
+      airports = {};
 
-    airports = {};
-    rows.forEach(r => {
-      const name = r["Airport Name"];
-      if(!airports[name]){
-        airports[name] = {
-          name,
-          lat: parseFloat(r["Latitude"]),
-          lon: parseFloat(r["Longitude"]),
-          markers: []
-        };
-      }
-
-      if(type === "Caterers"){
-        if(r["Caterer Name"]) airports[name].markers.push({
-          name: r["Caterer Name"],
-          url: r["Caterer URL"],
-          email: r["Caterer Email"],
-          phone: r["Caterer Phone"]
-        });
-      } else if(type === "Reps"){
-        if(r["Rep Name"]) airports[name].markers.push({
-          name: r["Rep Name"],
-          email: r["Rep Email"],
-          phone: r["Rep Phone"]
-        });
-      }
-    });
-
-    Object.values(airports).forEach(airport => {
-      const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
-        .addTo(map)
-        .bindTooltip(airport.name,{direction:"top", offset:[0,-10]});
-
-      let markers = [];
-      let lines = [];
-      let visible = false;
-      let toggleInProgress = false;
-
-      function updatePositions(){
-        const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
-        const angleStep = (2 * Math.PI) / airport.markers.length;
-        airport.markers.forEach((m,i)=>{
-          const angle = i*angleStep;
-          const x = airportPoint.x + pixelRadius*Math.cos(angle);
-          const y = airportPoint.y + pixelRadius*Math.sin(angle);
-          const latlng = map.layerPointToLatLng([x,y]);
-          markers[i].setLatLng(latlng);
-          lines[i].setLatLngs([[airport.lat, airport.lon],[latlng.lat, latlng.lng]]);
-        });
-      }
-
-      function toggleMarkers(){
-        if(toggleInProgress) return; // <-- bloque double clic rapide
-        toggleInProgress = true;
-        setTimeout(()=>toggleInProgress=false, 250);
-
-        if(currentlyVisible && currentlyVisible!==airport){
-          currentlyVisible.hideMarkers();
+      rows.forEach(r=>{
+        const name = r["Airport Name"];
+        if(!airports[name]){
+          airports[name] = {
+            name,
+            lat: parseFloat(r["Latitude"]),
+            lon: parseFloat(r["Longitude"]),
+            markers:[]
+          };
         }
 
-        if(!visible && airport.markers.length>0){
+        if(type==="Caterers"){
+          airports[name].markers.push({
+            name:r["Caterer Name"],
+            url:r["Caterer URL"],
+            email:r["Caterer Email"],
+            phone:r["Caterer Phone"]
+          });
+        } else if(type==="Reps"){
+          airports[name].markers.push({
+            name:r["Rep Name"],
+            email:r["Rep Email"],
+            phone:r["Rep Phone"]
+          });
+        }
+      });
+
+      Object.values(airports).forEach(airport=>{
+        const airportMarker = L.marker([airport.lat,airport.lon],{icon:airportIcon,title:airport.name})
+          .addTo(map)
+          .bindTooltip(airport.name,{direction:"top",offset:[0,-10]});
+
+        let markers = [];
+        let lines = [];
+        let visible=false;
+
+        function updatePositions(){
+          const airportPoint = map.latLngToLayerPoint([airport.lat,airport.lon]);
           const angleStep = (2*Math.PI)/airport.markers.length;
           airport.markers.forEach((m,i)=>{
             const angle = i*angleStep;
-            const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
             const x = airportPoint.x + pixelRadius*Math.cos(angle);
             const y = airportPoint.y + pixelRadius*Math.sin(angle);
             const latlng = map.layerPointToLatLng([x,y]);
-            const icon = (type==="Caterers") ? catererIcon : repIcon;
-
-            let popupContent = `<b>${m.name}</b>`;
-            if(type==="Caterers"){
-              popupContent += `<br>🌐 <a href="${m.url}" target="_blank">${m.url}</a>`;
-            }
-            popupContent += `<br>💻 <a href="mailto:${m.email}">${m.email}</a>`;
-            popupContent += `<br>📞 <a href="tel:${m.phone}">${m.phone}</a>`;
-
-            const marker = L.marker(latlng,{icon, title:m.name})
-              .addTo(map)
-              .bindPopup(popupContent)
-              .bindTooltip(m.name,{direction:"top",offset:[0,-10]});
-
-            const line = L.polyline([[airport.lat, airport.lon],[latlng.lat, latlng.lng]], {color:'black', dashArray:'4,4', weight:1, opacity:0.7}).addTo(map);
-            markers.push(marker);
-            lines.push(line);
+            markers[i].setLatLng(latlng);
+            lines[i].setLatLngs([[airport.lat,airport.lon],[latlng.lat,latlng.lng]]);
           });
-          map.on('zoom', updatePositions);
-          visible = true;
-          currentlyVisible = airport;
-        } else {
-          airport.hideMarkers();
         }
-      }
 
-      airport.hideMarkers = function(){
-        markers.forEach(m=>map.removeLayer(m));
-        lines.forEach(l=>map.removeLayer(l));
-        markers=[];
-        lines=[];
-        map.off('zoom', updatePositions);
-        visible=false;
-        if(currentlyVisible===airport) currentlyVisible=null;
-      }
+        function toggleMarkers(){
+          if(currentlyVisible && currentlyVisible!==airport){
+            currentlyVisible.hideMarkers();
+          }
+          if(!visible){
+            const angleStep = (2*Math.PI)/airport.markers.length;
+            airport.markers.forEach((m,i)=>{
+              const angle = i*angleStep;
+              const airportPoint = map.latLngToLayerPoint([airport.lat,airport.lon]);
+              const x = airportPoint.x + pixelRadius*Math.cos(angle);
+              const y = airportPoint.y + pixelRadius*Math.sin(angle);
+              const latlng = map.layerPointToLatLng([x,y]);
+              const icon = (type==="Caterers") ? catererIcon : repIcon;
 
-      airportMarker.on('click', toggleMarkers);
-    });
+              let popupContent = `<b>${m.name}</b>`;
+              if(type==="Caterers") popupContent+=`<br>🌐 <a href="${m.url}" target="_blank">${m.url}</a>`;
+              popupContent+=`<br>💻 <a href="mailto:${m.email}">${m.email}</a>`;
+              popupContent+=`<br>📞 <a href="tel:${m.phone}">${m.phone}</a>`;
 
-  } catch(err){
-    console.error("Error loading data:", err);
-  }
+              const marker = L.marker(latlng,{icon,title:m.name})
+                .addTo(map)
+                .bindPopup(popupContent)
+                .bindTooltip(m.name,{direction:"top",offset:[0,-10]});
+              const line = L.polyline([[airport.lat,airport.lon],[latlng.lat,latlng.lng]],{color:'black',dashArray:'4,4',weight:1,opacity:0.7}).addTo(map);
+              markers.push(marker);
+              lines.push(line);
+            });
+            map.on('zoom',updatePositions);
+            visible=true;
+            currentlyVisible=airport;
+          } else {
+            airport.hideMarkers();
+          }
+        }
+
+        airport.hideMarkers=function(){
+          markers.forEach(m=>map.removeLayer(m));
+          lines.forEach(l=>map.removeLayer(l));
+          markers=[]; lines=[];
+          map.off('zoom',updatePositions);
+          visible=false;
+          if(currentlyVisible===airport) currentlyVisible=null;
+        }
+
+        airportMarker.on('click',toggleMarkers);
+      });
+
+    })
+    .catch(err=>console.error("Error loading sheet:",err));
 }
 
-// --- Charger par défaut les Caterers
+// Charger par défaut les Caterers
 loadType('Caterers');
 </script>
 </body>

@@ -1,86 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Catering & Reps Map</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 90vh; width: 100%; }
-    #region-controls {
-      position: absolute;
-      top: 10px;
-      right: 120px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
-    #type-controls {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
-    #region-controls button, #region-controls select, #type-controls button {
-      margin-right: 5px;
-    }
-    #map-title {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      background: rgba(255,255,255,0.8);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-weight: bold;
-      font-size: 16px;
-    }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-</head>
-<body>
-
-<script>
-const PASSWORD = "Catering2025";
-function askPassword() {
-  const userInput = prompt("Enter password to access the map:");
-  if(userInput === PASSWORD) return true;
-  alert("Incorrect password. Access denied.");
-  window.location.href = "about:blank";
-  return false;
-}
-if(!askPassword()) throw new Error("Access denied");
-</script>
-
-<div id="map"></div>
-<div id="map-title">Catering & Reps Map</div>
-
-<div id="region-controls">
-  <button id="eu-btn">EU</button>
-  <select id="eu-select" style="display:none;" onchange="flyToEU(this.value)">
-    <option value="">Select a country</option>
-    <option value="UK">UK</option>
-    <option value="France">France</option>
-    <option value="Italy">Italy</option>
-    <option value="Spain">Spain</option>
-  </select>
-  <button onclick="flyToRegion('US')">US</button>
-  <button onclick="flyToRegion('APAC')">APAC</button>
-</div>
-
-<div id="type-controls">
-  <button onclick="loadType('Caterers')">Caterers</button>
-  <button onclick="loadType('Reps')">Reps</button>
-</div>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([51.5, -0.6], 4);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
@@ -93,45 +10,18 @@ const pixelRadius = 120;
 let euDropdownVisible = false;
 let airports = {};
 let currentlyVisible = null;
+let allMarkers = []; // <-- tableau global pour tous les markers et lignes
 
-document.getElementById('eu-btn').onclick = () => {
-  const dropdown = document.getElementById('eu-select');
-  if(!euDropdownVisible){
-    dropdown.style.display = 'inline-block';
-    map.flyTo([50,10],5);
-    euDropdownVisible = true;
-  } else {
-    dropdown.style.display = 'none';
-    dropdown.value = "";
-    euDropdownVisible = false;
-  }
-};
-
-function flyToEU(country){
-  switch(country){
-    case 'UK': map.flyTo([54,-2],6); break;
-    case 'France': map.flyTo([46.5,2],6); break;
-    case 'Italy': map.flyTo([42.5,12],6); break;
-    case 'Spain': map.flyTo([40,-3],6); break;
-  }
-}
-
-function flyToRegion(region){
-  document.getElementById('eu-select').style.display='none';
-  document.getElementById('eu-select').value="";
-  euDropdownVisible=false;
-  if(region==='US') map.flyTo([39,-98],5);
-  else if(region==='APAC') map.flyTo([0,120],4);
+function clearAllMarkers() {
+  allMarkers.forEach(m=>map.removeLayer(m));
+  allMarkers = [];
+  currentlyVisible = null;
 }
 
 function loadType(type){
-  if(currentlyVisible){
-    Object.values(airports).forEach(a=>a.hideMarkers && a.hideMarkers());
-    currentlyVisible=null;
-  }
+  clearAllMarkers(); // <-- supprime tout avant de charger le type
 
   const API_URL = `/.netlify/functions/get-sheet-data?type=${type}`;
-
   fetch(API_URL)
     .then(res=>res.text())
     .then(csvText=>{
@@ -141,41 +31,25 @@ function loadType(type){
       rows.forEach(r=>{
         const name = r["Airport Name"];
         if(!airports[name]){
-          airports[name] = {
-            name,
-            lat: parseFloat(r["Latitude"]),
-            lon: parseFloat(r["Longitude"]),
-            markers:[]
-          };
+          airports[name] = { name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markers:[] };
         }
 
         if(type==="Caterers"){
-          airports[name].markers.push({
-            name:r["Caterer Name"],
-            url:r["Caterer URL"],
-            email:r["Caterer Email"],
-            phone:r["Caterer Phone"]
-          });
+          airports[name].markers.push({ name:r["Caterer Name"], url:r["Caterer URL"], email:r["Caterer Email"], phone:r["Caterer Phone"] });
         } else if(type==="Reps"){
-          airports[name].markers.push({
-            name:r["Rep Name"],
-            email:r["Rep Email"],
-            phone:r["Rep Phone"]
-          });
+          airports[name].markers.push({ name:r["Rep Name"], email:r["Rep Email"], phone:r["Rep Phone"] });
         }
       });
 
       Object.values(airports).forEach(airport=>{
-        const airportMarker = L.marker([airport.lat,airport.lon],{icon:airportIcon,title:airport.name})
-          .addTo(map)
+        const airportMarker = L.marker([airport.lat,airport.lon],{icon:airportIcon,title:airport.name}).addTo(map)
           .bindTooltip(airport.name,{direction:"top",offset:[0,-10]});
+        allMarkers.push(airportMarker);
 
-        let markers = [];
-        let lines = [];
-        let visible=false;
+        let visible = false;
+        let markers=[], lines=[];
 
         function updatePositions(){
-          if(markers.length===0) return; // <-- aucun marker, rien à déplacer
           const airportPoint = map.latLngToLayerPoint([airport.lat,airport.lon]);
           const angleStep = (2*Math.PI)/markers.length;
           markers.forEach((m,i)=>{
@@ -189,12 +63,14 @@ function loadType(type){
         }
 
         function toggleMarkers(){
-          if(currentlyVisible && currentlyVisible!==airport){
-            currentlyVisible.hideMarkers();
-          }
-          if(airport.markers.length===0) return; // <-- pas de markers, ne rien afficher
-
-          if(!visible){
+          if(visible){
+            markers.forEach(m=>map.removeLayer(m));
+            lines.forEach(l=>map.removeLayer(l));
+            markers=[]; lines=[];
+            map.off('zoom',updatePositions);
+            visible=false;
+            currentlyVisible=null;
+          } else {
             const angleStep = (2*Math.PI)/airport.markers.length;
             airport.markers.forEach((m,i)=>{
               const angle = i*angleStep;
@@ -209,36 +85,22 @@ function loadType(type){
               popupContent+=`<br>💻 <a href="mailto:${m.email}">${m.email}</a>`;
               popupContent+=`<br>📞 <a href="tel:${m.phone}">${m.phone}</a>`;
 
-              const marker = L.marker(latlng,{icon,title:m.name})
-                .addTo(map)
-                .bindPopup(popupContent)
+              const marker = L.marker(latlng,{icon,title:m.name}).addTo(map).bindPopup(popupContent)
                 .bindTooltip(m.name,{direction:"top",offset:[0,-10]});
-
               const line = L.polyline([[airport.lat,airport.lon],[latlng.lat,latlng.lng]],{color:'black',dashArray:'4,4',weight:1,opacity:0.7}).addTo(map);
 
               markers.push(marker);
               lines.push(line);
+              allMarkers.push(marker,line); // <-- ajout au tableau global
             });
-            map.on('zoom', updatePositions);
+            map.on('zoom',updatePositions);
             visible=true;
             currentlyVisible=airport;
-          } else {
-            airport.hideMarkers();
           }
-        }
-
-        airport.hideMarkers=function(){
-          markers.forEach(m=>map.removeLayer(m));
-          lines.forEach(l=>map.removeLayer(l));
-          markers=[]; lines=[];
-          map.off('zoom',updatePositions);
-          visible=false;
-          if(currentlyVisible===airport) currentlyVisible=null;
         }
 
         airportMarker.on('click',toggleMarkers);
       });
-
     })
     .catch(err=>console.error("Error loading sheet:",err));
 }
@@ -246,5 +108,3 @@ function loadType(type){
 // Charger par défaut les Caterers
 loadType('Caterers');
 </script>
-</body>
-</html>

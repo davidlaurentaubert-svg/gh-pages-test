@@ -27,7 +27,9 @@
       border-radius: 5px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
-    #region-controls button, #region-controls select, #type-controls button { margin-right: 5px; }
+    #region-controls button, #region-controls select, #type-controls button {
+      margin-right: 5px;
+    }
     #map-title {
       position: absolute;
       top: 10px;
@@ -47,11 +49,14 @@
 
 <script>
 const PASSWORD = "Catering2025";
-if(prompt("Enter password to access the map:") !== PASSWORD) {
+function askPassword() {
+  const userInput = prompt("Enter password to access the map:");
+  if(userInput === PASSWORD) return true;
   alert("Incorrect password. Access denied.");
   window.location.href = "about:blank";
-  throw new Error("Access denied");
+  return false;
 }
+if(!askPassword()) throw new Error("Access denied");
 </script>
 
 <div id="map"></div>
@@ -87,7 +92,6 @@ const repIcon = L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/256/6429/642
 const pixelRadius = 120;
 let euDropdownVisible = false;
 let allAirportMarkers = [];
-let currentlyVisibleType = null;
 
 document.getElementById('eu-btn').onclick = () => {
   const dropdown = document.getElementById('eu-select');
@@ -103,8 +107,12 @@ document.getElementById('eu-btn').onclick = () => {
 };
 
 function flyToEU(country){
-  const coords = {UK:[54,-2],France:[46.5,2],Italy:[42.5,12],Spain:[40,-3]}[country];
-  if(coords) map.flyTo(coords,6);
+  switch(country){
+    case 'UK': map.flyTo([54,-2],6); break;
+    case 'France': map.flyTo([46.5,2],6); break;
+    case 'Italy': map.flyTo([42.5,12],6); break;
+    case 'Spain': map.flyTo([40,-3],6); break;
+  }
 }
 
 function flyToRegion(region){
@@ -116,16 +124,16 @@ function flyToRegion(region){
 }
 
 function loadType(type){
-  // Supprimer tous les anciens markers visibles
+  // Supprimer tous les markers existants
   allAirportMarkers.forEach(a=>{
     if(a.visible){
       a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
       a.lines.forEach(l=>map.removeLayer(l));
-      a.lines = [];
-      a.visible = false;
+      a.visible=false;
+      a.lines=[];
     }
   });
-  allAirportMarkers = [];
+  allAirportMarkers=[];
 
   fetch(`/.netlify/functions/get-sheet-data?type=${type}`)
     .then(res=>res.text())
@@ -162,7 +170,7 @@ function loadType(type){
               a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
               a.lines.forEach(l=>map.removeLayer(l));
               a.lines = [];
-              a.visible = false;
+              a.visible=false;
             }
           });
 
@@ -189,9 +197,8 @@ function loadType(type){
           });
 
           airport.visible = true;
+          allAirportMarkers.push(airport);
         });
-
-        allAirportMarkers.push(airport);
       });
     })
     .catch(err=>console.error("Error loading sheet:",err));

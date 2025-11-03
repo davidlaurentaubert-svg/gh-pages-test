@@ -7,26 +7,16 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map { height: 90vh; width: 100%; }
-    #region-controls {
+    #region-controls, #type-controls {
       position: absolute;
-      top: 10px;
-      right: 120px;
       z-index: 1000;
       background: white;
       padding: 5px 10px;
       border-radius: 5px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
-    #type-controls {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
+    #region-controls { top:10px; right:120px; }
+    #type-controls { bottom:10px; right:10px; }
     #region-controls button, #region-controls select, #type-controls button {
       margin-right: 5px;
     }
@@ -91,7 +81,7 @@ const repIcon = L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/256/6429/642
 
 const pixelRadius = 120;
 let euDropdownVisible = false;
-let allAirportMarkers = [];
+let allAirportMarkers = []; // Tableau global pour tous les markers affichés
 
 document.getElementById('eu-btn').onclick = () => {
   const dropdown = document.getElementById('eu-select');
@@ -123,17 +113,16 @@ function flyToRegion(region){
   else if(region==='APAC') map.flyTo([0,120],4);
 }
 
-function loadType(type){
-  // Supprimer tous les markers existants
+function removeAllMarkers(){
   allAirportMarkers.forEach(a=>{
-    if(a.visible){
-      a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
-      a.lines.forEach(l=>map.removeLayer(l));
-      a.visible=false;
-      a.lines=[];
-    }
+    a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
+    a.lines.forEach(l=>map.removeLayer(l));
   });
-  allAirportMarkers=[];
+  allAirportMarkers = [];
+}
+
+function loadType(type){
+  removeAllMarkers(); // supprimer tous les markers existants
 
   fetch(`/.netlify/functions/get-sheet-data?type=${type}`)
     .then(res=>res.text())
@@ -143,7 +132,8 @@ function loadType(type){
 
       rows.forEach(r=>{
         const name = r["Airport Name"];
-        if(!airportsMap[name]) airportsMap[name] = {name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markers:[], lines:[], airportMarker:null, visible:false};
+        if(!airportsMap[name]) airportsMap[name] = {name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markers:[], lines:[], airportMarker:null};
+
         if(type==="Caterers"){
           airportsMap[name].markers.push({name:r["Caterer Name"], url:r["Caterer URL"], email:r["Caterer Email"], phone:r["Caterer Phone"], marker:null});
         } else {
@@ -157,23 +147,15 @@ function loadType(type){
         airport.airportMarker = airportMarker;
 
         airportMarker.on('click', ()=>{
-          if(airport.visible){
-            airport.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
-            airport.lines.forEach(l=>map.removeLayer(l));
-            airport.lines = [];
-            airport.visible = false;
-            return;
-          }
-
+          // Supprimer les markers d'autres aéroports
           allAirportMarkers.forEach(a=>{
-            if(a.visible){
-              a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
-              a.lines.forEach(l=>map.removeLayer(l));
-              a.lines = [];
-              a.visible=false;
-            }
+            a.markers.forEach(m=>m.marker && map.removeLayer(m.marker));
+            a.lines.forEach(l=>map.removeLayer(l));
+            a.lines = [];
           });
+          allAirportMarkers = [];
 
+          // Ajouter les markers du type actuel
           airport.markers.forEach((m,i)=>{
             const angleStep = (2*Math.PI)/airport.markers.length;
             const angle = i*angleStep;
@@ -196,7 +178,6 @@ function loadType(type){
             airport.lines.push(line);
           });
 
-          airport.visible = true;
           allAirportMarkers.push(airport);
         });
       });

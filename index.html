@@ -7,29 +7,30 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map { height: 90vh; width: 100%; }
-    #region-controls {
+
+    #region-controls, #type-controls {
+      background: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      z-index: 1000;
       position: absolute;
+    }
+
+    #region-controls {
       top: 10px;
       right: 120px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
+
     #type-controls {
-      position: absolute;
       bottom: 10px;
       right: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
+
     #region-controls button, #region-controls select, #type-controls button {
       margin-right: 5px;
     }
+
     #map-title {
       position: absolute;
       top: 10px;
@@ -41,6 +42,58 @@
       border-radius: 5px;
       font-weight: bold;
       font-size: 16px;
+      text-align: center;
+    }
+
+    #search-bar {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255,255,255,0.95);
+      padding: 6px 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #search-bar label {
+      font-weight: bold;
+    }
+
+    #search-bar input {
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      min-width: 250px;
+    }
+
+    #suggestions {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      max-height: 150px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    #suggestions div {
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    #suggestions div:hover {
+      background-color: #eee;
+    }
+
+    #not-found {
+      color: red;
+      font-weight: bold;
+      margin-top: 2px;
+      display: none;
     }
   </style>
 </head>
@@ -68,6 +121,14 @@ if(!askPassword()){
 <div id="map"></div>
 <div id="map-title">Catering & Reps Map</div>
 
+<!-- Barre de recherche -->
+<div id="search-bar">
+  <label for="search-input">Search Airport:</label>
+  <input type="text" id="search-input" placeholder="Type airport name">
+  <div id="suggestions"></div>
+  <div id="not-found">Not Found</div>
+</div>
+
 <div id="region-controls">
   <button id="eu-btn">EU</button>
   <select id="eu-select" style="display:none;" onchange="flyToEU(this.value)">
@@ -91,14 +152,17 @@ if(!askPassword()){
 const map = L.map('map').setView([51.5, -0.6], 4);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-// --- Icônes
 const airportIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/7893/7893979.png', iconSize:[50,50], iconAnchor:[16,32]});
 const catererIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940981.png', iconSize:[40,40], iconAnchor:[14,28]});
 const repIcon = L.icon({iconUrl: 'https://cdn-icons-png.flaticon.com/512/6356/6356705.png', iconSize:[40,40], iconAnchor:[14,28]});
 
 const pixelRadius = 120;
 let euDropdownVisible = false;
+let airports = {}; 
+let currentlyVisible = null;
+let airportMarkers = [];
 
+// --- Region buttons
 document.getElementById('eu-btn').onclick = () => {
   const dropdown = document.getElementById('eu-select');
   if(!euDropdownVisible){
@@ -130,13 +194,13 @@ function flyToRegion(region){
   else if(region==='APAC') map.flyTo([0, 120], 4);
 }
 
-// --- Gestion des markers
-let airports = {}; 
-let currentlyVisible = null;
-let airportMarkers = []; // Pour tous les markers aéroports
+// --- Normalize text
+function normalizeText(text){
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
+// --- Load markers
 function loadType(type){
-  // --- Supprime tous les markers existants
   if(airportMarkers.length > 0){
     airportMarkers.forEach(m => map.removeLayer(m));
     airportMarkers = [];
@@ -145,7 +209,7 @@ function loadType(type){
     Object.values(airports).forEach(a => a.hideMarkers && a.hideMarkers());
     currentlyVisible = null;
   }
-  airports = {}; // réinitialise la structure
+  airports = {};
 
   const SHEET_ID = "1r1RDAQkpflVXsEpt_Xt1X5qWaFueY9ulRI9lZ7on-2Y";
   const API_URL = `https://opensheet.elk.sh/${SHEET_ID}/${type}`;
@@ -153,44 +217,30 @@ function loadType(type){
   fetch(API_URL)
     .then(res => res.json())
     .then(rows => {
-      // --- Construction de l'objet airports
       rows.forEach(r => {
         const name = r["Airport Name"];
         if(!airports[name]){
-          airports[name] = {
-            name,
-            lat: parseFloat(r["Latitude"]),
-            lon: parseFloat(r["Longitude"]),
-            markersData: []
-          };
+          airports[name] = { name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markersData: [] };
         }
 
         if(type === "Caterers"){
           airports[name].markersData.push({
-            name: r["Caterer Name"],
-            url: r["Caterer URL"],
-            email: r["Caterer Email"],
-            phone: r["Caterer Phone"]
+            name: r["Caterer Name"], url: r["Caterer URL"], email: r["Caterer Email"], phone: r["Caterer Phone"]
           });
         } else if(type === "Reps"){
           airports[name].markersData.push({
-            name: r["Rep Name"],
-            email: r["Rep Email"],
-            phone: r["Rep Phone"]
+            name: r["Rep Name"], email: r["Rep Email"], phone: r["Rep Phone"]
           });
         }
       });
 
-      // --- Création des markers d'aéroport
       Object.values(airports).forEach(airport => {
         const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
           .addTo(map)
           .bindTooltip(airport.name,{direction:"top", offset:[0,-10]});
         airportMarkers.push(airportMarker);
 
-        let markers = [];
-        let lines = [];
-        let visible = false;
+        let markers = [], lines = [], visible = false;
 
         function updatePositions(){
           const airportPoint = map.latLngToLayerPoint([airport.lat, airport.lon]);
@@ -258,9 +308,91 @@ function loadType(type){
     .catch(err=>console.error("Error loading sheet:", err));
 }
 
-// --- Charger par défaut les Caterers
-loadType('Caterers');
+// --- Autocompletion avec navigation clavier
+const input = document.getElementById('search-input');
+const suggestionsDiv = document.getElementById('suggestions');
+const notFoundDiv = document.getElementById('not-found');
+let selectedIndex = -1;
 
+function updateSuggestions(){
+  const query = normalizeText(input.value.trim());
+  suggestionsDiv.innerHTML = '';
+  notFoundDiv.style.display = 'none';
+  selectedIndex = -1;
+
+  if(!query) { suggestionsDiv.style.display = 'none'; return; }
+
+  const matches = Object.values(airports)
+    .filter(a => normalizeText(a.name).includes(query))
+    .slice(0,10);
+
+  if(matches.length === 0){
+    suggestionsDiv.style.display = 'none';
+    return;
+  }
+
+  matches.forEach((a, idx)=>{
+    const div = document.createElement('div');
+    div.textContent = a.name;
+    div.onclick = ()=> {
+      map.flyTo([a.lat, a.lon], 7);
+      suggestionsDiv.style.display = 'none';
+      input.value = a.name;
+    };
+    div.dataset.index = idx;
+    suggestionsDiv.appendChild(div);
+  });
+
+  suggestionsDiv.style.display = 'block';
+}
+
+function highlightItem(){
+  const items = suggestionsDiv.querySelectorAll('div');
+  items.forEach((item, idx)=>{
+    item.style.backgroundColor = (idx === selectedIndex) ? '#ddd' : '';
+  });
+}
+
+input.addEventListener('input', updateSuggestions);
+
+input.addEventListener('keydown', function(e){
+  const items = suggestionsDiv.querySelectorAll('div');
+  if(e.key === 'ArrowDown'){
+    e.preventDefault();
+    if(selectedIndex < items.length - 1) selectedIndex++;
+    highlightItem();
+  } else if(e.key === 'ArrowUp'){
+    e.preventDefault();
+    if(selectedIndex > 0) selectedIndex--;
+    highlightItem();
+  } else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(selectedIndex >= 0){
+      const item = items[selectedIndex];
+      const name = item.textContent;
+      const airport = Object.values(airports).find(a => a.name === name);
+      if(airport){
+        map.flyTo([airport.lat, airport.lon], 7);
+        input.value = airport.name;
+      }
+      suggestionsDiv.style.display = 'none';
+      notFoundDiv.style.display = 'none';
+    } else {
+      const query = normalizeText(input.value.trim());
+      const found = Object.values(airports).find(a => normalizeText(a.name).includes(query));
+      if(found){
+        map.flyTo([found.lat, found.lon], 7);
+        suggestionsDiv.style.display = 'none';
+        notFoundDiv.style.display = 'none';
+      } else {
+        notFoundDiv.style.display = 'block';
+      }
+    }
+  }
+});
+
+// Charger par défaut
+loadType('Caterers');
 </script>
 </body>
 </html>

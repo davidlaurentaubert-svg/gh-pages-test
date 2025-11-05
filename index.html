@@ -8,27 +8,33 @@
   <style>
     #map { height: 90vh; width: 100%; }
 
-    #region-controls, #type-controls {
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      z-index: 1000;
+    #top-controls {
       position: absolute;
-    }
-
-    #region-controls {
       top: 10px;
-      right: 120px;
-    }
-
-    #type-controls {
-      bottom: 10px;
       right: 10px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+      background: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
 
-    #region-controls button, #region-controls select, #type-controls button {
-      margin-right: 5px;
+    #top-controls button,
+    #top-controls select {
+      padding: 8px 14px;
+      font-size: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #f8f8f8;
+      transition: background-color 0.2s;
+    }
+
+    #top-controls button:hover,
+    #top-controls select:hover {
+      background-color: #eaeaea;
     }
 
     #map-title {
@@ -47,7 +53,7 @@
 
     #search-bar {
       position: absolute;
-      top: 50px;
+      top: 60px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
@@ -95,13 +101,20 @@
       margin-top: 2px;
       display: none;
     }
+
+    hr.separator {
+      height: 2px;
+      background-color: #999;
+      border: none;
+      margin: 0 5px;
+      align-self: stretch;
+    }
   </style>
 </head>
 <body>
 
 <script>
 const PASSWORD = "Catering2025";
-
 function askPassword() {
   const userInput = prompt("Enter password to access the map:");
   if(userInput === PASSWORD){
@@ -112,7 +125,6 @@ function askPassword() {
     return false;
   }
 }
-
 if(!askPassword()){
   throw new Error("Access denied");
 }
@@ -123,16 +135,17 @@ if(!askPassword()){
 
 <!-- Barre de recherche -->
 <div id="search-bar">
-  <label for="search-input">Search Airport:</label>
-  <input type="text" id="search-input" placeholder="Type airport name">
+  <label for="search-input">Search Airport, IATA, or ICAO:</label>
+  <input type="text" id="search-input" placeholder="Type airport name, IATA or ICAO code">
   <div id="suggestions"></div>
   <div id="not-found">Not Found</div>
 </div>
 
-<div id="region-controls">
+<!-- Contrôles du haut (régions et type) -->
+<div id="top-controls">
   <button id="eu-btn">EU</button>
   <select id="eu-select" style="display:none;" onchange="flyToEU(this.value)">
-    <option value="">Select a country</option>
+    <option value="">Select country</option>
     <option value="UK">UK</option>
     <option value="France">France</option>
     <option value="Italy">Italy</option>
@@ -140,9 +153,7 @@ if(!askPassword()){
   </select>
   <button onclick="flyToRegion('US')">US</button>
   <button onclick="flyToRegion('APAC')">APAC</button>
-</div>
-
-<div id="type-controls">
+  <hr class="separator">
   <button onclick="loadType('Caterers')">Caterers</button>
   <button onclick="loadType('Reps')">Reps</button>
 </div>
@@ -162,7 +173,7 @@ let airports = {};
 let currentlyVisible = null;
 let airportMarkers = [];
 
-// --- Region buttons
+// --- Boutons régions
 document.getElementById('eu-btn').onclick = () => {
   const dropdown = document.getElementById('eu-select');
   if(!euDropdownVisible){
@@ -194,12 +205,12 @@ function flyToRegion(region){
   else if(region==='APAC') map.flyTo([0, 120], 4);
 }
 
-// --- Normalize text
+// --- Normalisation texte
 function normalizeText(text){
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-// --- Load markers
+// --- Chargement des markers depuis Google Sheet
 function loadType(type){
   if(airportMarkers.length > 0){
     airportMarkers.forEach(m => map.removeLayer(m));
@@ -219,8 +230,10 @@ function loadType(type){
     .then(rows => {
       rows.forEach(r => {
         const name = r["Airport Name"];
+        const iata = r["IATA"] || "";
+        const icao = r["ICAO"] || ""; // <-- ✅ Nouvelle colonne ICAO
         if(!airports[name]){
-          airports[name] = { name, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markersData: [] };
+          airports[name] = { name, iata, icao, lat: parseFloat(r["Latitude"]), lon: parseFloat(r["Longitude"]), markersData: [] };
         }
 
         if(type === "Caterers"){
@@ -237,7 +250,7 @@ function loadType(type){
       Object.values(airports).forEach(airport => {
         const airportMarker = L.marker([airport.lat, airport.lon], {icon: airportIcon, title: airport.name})
           .addTo(map)
-          .bindTooltip(airport.name,{direction:"top", offset:[0,-10]});
+          .bindTooltip(`${airport.name}${airport.iata ? " ("+airport.iata+")" : ""}${airport.icao ? " ["+airport.icao+"]" : ""}`, {direction:"top", offset:[0,-10]});
         airportMarkers.push(airportMarker);
 
         let markers = [], lines = [], visible = false;
@@ -308,7 +321,7 @@ function loadType(type){
     .catch(err=>console.error("Error loading sheet:", err));
 }
 
-// --- Autocompletion avec navigation clavier
+// --- Autocompletion avec navigation clavier (nom, IATA, ICAO)
 const input = document.getElementById('search-input');
 const suggestionsDiv = document.getElementById('suggestions');
 const notFoundDiv = document.getElementById('not-found');
@@ -323,7 +336,7 @@ function updateSuggestions(){
   if(!query) { suggestionsDiv.style.display = 'none'; return; }
 
   const matches = Object.values(airports)
-    .filter(a => normalizeText(a.name).includes(query))
+    .filter(a => normalizeText(a.name).includes(query) || normalizeText(a.iata).includes(query) || normalizeText(a.icao).includes(query))
     .slice(0,10);
 
   if(matches.length === 0){
@@ -332,8 +345,9 @@ function updateSuggestions(){
   }
 
   matches.forEach((a, idx)=>{
+    const display = `${a.name}${a.iata ? " ("+a.iata+")" : ""}${a.icao ? " ["+a.icao+"]" : ""}`;
     const div = document.createElement('div');
-    div.textContent = a.name;
+    div.textContent = display;
     div.onclick = ()=> {
       map.flyTo([a.lat, a.lon], 7);
       suggestionsDiv.style.display = 'none';
@@ -369,7 +383,7 @@ input.addEventListener('keydown', function(e){
     e.preventDefault();
     if(selectedIndex >= 0){
       const item = items[selectedIndex];
-      const name = item.textContent;
+      const name = item.textContent.split(" (")[0];
       const airport = Object.values(airports).find(a => a.name === name);
       if(airport){
         map.flyTo([airport.lat, airport.lon], 7);
@@ -379,7 +393,7 @@ input.addEventListener('keydown', function(e){
       notFoundDiv.style.display = 'none';
     } else {
       const query = normalizeText(input.value.trim());
-      const found = Object.values(airports).find(a => normalizeText(a.name).includes(query));
+      const found = Object.values(airports).find(a => normalizeText(a.name).includes(query) || normalizeText(a.iata).includes(query) || normalizeText(a.icao).includes(query));
       if(found){
         map.flyTo([found.lat, found.lon], 7);
         suggestionsDiv.style.display = 'none';

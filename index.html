@@ -32,14 +32,14 @@
     #top-controls .divider {
       width: 2px;
       height: 30px;
-      background-color: #888; /* plus visible */
+      background-color: #888; /* more visible */
       border-radius: 1px;
     }
 
     #top-controls button,
     #top-controls select {
       margin: 0;
-      padding: 8px 14px;   /* bouton plus grand */
+      padding: 8px 14px;   /* larger button */
       font-size: 15px;
       border: 1px solid #ccc;
       border-radius: 4px;
@@ -118,6 +118,25 @@
       margin-top: 2px;
       display: none;
     }
+
+    /* --- Help button --- */
+    #help-button {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+
+    #help-button:hover {
+      background-color: #f0f0f0;
+    }
   </style>
 </head>
 <body>
@@ -166,6 +185,12 @@ if(!askPassword()) throw new Error("Access denied");
   <div id="not-found">Not Found</div>
 </div>
 
+<!-- Help button -->
+<button id="help-button" 
+  onclick="window.location.href='mailto:David.Aubert@aircharterservice.com?subject=Improving%20the%20Catering%20Map&body=Suggest%20a%20new%20caterer,%20improvement%20to,%20or%20issue%20with%20the%20map…'">
+  Help Improve This Map
+</button>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([51.5,-0.6],4);
@@ -195,6 +220,7 @@ document.getElementById('eu-btn').onclick = () => {
   }
 };
 
+// --- Fly to a specific EU country
 function flyToEU(country){
   switch(country){
     case 'UK': map.flyTo([54,-2],6); break;
@@ -203,6 +229,8 @@ function flyToEU(country){
     case 'Spain': map.flyTo([40,-3],6); break;
   }
 }
+
+// --- Fly to a global region
 function flyToRegion(region){
   document.getElementById('eu-select').style.display='none';
   document.getElementById('eu-select').value="";
@@ -211,10 +239,10 @@ function flyToRegion(region){
   else if(region==='APAC') map.flyTo([0,120],4);
 }
 
-// --- Normalize text
+// --- Normalize text (remove accents, lowercase)
 function normalizeText(text){ return text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase(); }
 
-// --- Load markers with IATA & ICAO
+// --- Load markers from Google Sheet (Caterers or Reps)
 function loadType(type){
   if(airportMarkers.length>0){ airportMarkers.forEach(m=>map.removeLayer(m)); airportMarkers=[]; }
   if(currentlyVisible){ Object.values(airports).forEach(a=>a.hideMarkers && a.hideMarkers()); currentlyVisible=null; }
@@ -239,6 +267,7 @@ function loadType(type){
         }
       });
 
+      // --- Add airport markers and links
       Object.values(airports).forEach(airport=>{
         const airportMarker=L.marker([airport.lat,airport.lon],{icon:airportIcon,title:airport.name})
           .addTo(map)
@@ -247,6 +276,7 @@ function loadType(type){
 
         let markers=[], lines=[], visible=false;
 
+        // --- Update marker positions on zoom
         function updatePositions(){
           const airportPoint=map.latLngToLayerPoint([airport.lat,airport.lon]);
           const angleStep=(2*Math.PI)/airport.markersData.length;
@@ -260,6 +290,7 @@ function loadType(type){
           });
         }
 
+        // --- Toggle caterer/rep markers around airport
         function toggleMarkers(){
           if(currentlyVisible && currentlyVisible!==airport) currentlyVisible.hideMarkers();
           if(!visible && airport.markersData.length>0){
@@ -291,6 +322,7 @@ function loadType(type){
           } else airport.hideMarkers();
         }
 
+        // --- Hide markers
         airport.hideMarkers=function(){
           markers.forEach(m=>map.removeLayer(m));
           lines.forEach(l=>map.removeLayer(l));
@@ -305,7 +337,7 @@ function loadType(type){
     .catch(err=>console.error("Error loading sheet:",err));
 }
 
-// --- Autocompletion avec recherche IATA & ICAO
+// --- Autocomplete with IATA & ICAO search
 const input=document.getElementById('search-input');
 const suggestionsDiv=document.getElementById('suggestions');
 const notFoundDiv=document.getElementById('not-found');
@@ -338,11 +370,13 @@ function updateSuggestions(){
   suggestionsDiv.style.display='block';
 }
 
+// --- Highlight suggestion with arrow keys
 function highlightItem(){
   const items=suggestionsDiv.querySelectorAll('div');
   items.forEach((item,idx)=>{ item.style.backgroundColor=(idx===selectedIndex)?'#ddd':''; });
 }
 
+// --- Handle keyboard navigation
 input.addEventListener('input',updateSuggestions);
 
 input.addEventListener('keydown',function(e){
@@ -369,7 +403,7 @@ input.addEventListener('keydown',function(e){
   }
 });
 
-// Charger par défaut
+// --- Load Caterers by default
 loadType('Caterers');
 </script>
 </body>

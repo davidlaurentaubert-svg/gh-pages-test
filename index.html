@@ -4,8 +4,22 @@
   <title>Catering & Reps Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Police moderne : Poppins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
+    :root{
+      --acs-blue: #11A7DD;      /* bleu clair ACS */
+      --acs-blue-dark: #0D7EA6; /* bleu foncé ACS */
+    }
+
+    * { box-sizing: border-box; }
+
+    body { font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; }
     #map { height: 90vh; width: 100%; }
 
     /* --- Top controls (Caterers/Reps + Regions) --- */
@@ -13,58 +27,115 @@
       position: absolute;
       top: 10px;
       right: 10px;
-      background: white;
-      padding: 6px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      background: rgba(255,255,255,0.85);
+      padding: 8px 12px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       z-index: 1000;
       display: flex;
       align-items: center;
       gap: 10px;
+      backdrop-filter: blur(6px);
     }
+    #top-controls .group { display: flex; align-items: center; gap: 8px; }
+    #top-controls .divider { width: 2px; height: 30px; background-color: rgba(150,150,150,0.5); border-radius: 1px; }
 
-    #top-controls .group {
-      display: flex;
+    /* --- Modern ACS Futuristic Buttons (robuste multi-navigateurs) --- */
+    #top-controls button {
+      margin: 0;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      display: inline-flex;
       align-items: center;
-      gap: 5px;
+      justify-content: center;
+      gap: 8px;
+
+      background: linear-gradient(135deg, var(--acs-blue), var(--acs-blue-dark));
+      color: #fff;
+
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+
+      /* fiabilité */
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+      transition: transform .15s ease, box-shadow .15s ease, filter .2s ease, background .2s ease;
+      outline: none;
+    }
+    #top-controls button:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.05);
+      box-shadow: 0 6px 16px rgba(17,167,221,0.35);
+    }
+    #top-controls button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(17,167,221,0.25);
+    }
+    #top-controls button:focus-visible {
+      box-shadow:
+        0 0 0 3px rgba(17,167,221,0.35),
+        0 6px 16px rgba(17,167,221,0.35);
+    }
+    @media (prefers-reduced-motion: reduce){
+      #top-controls button{ transition: none; }
+      #top-controls button:hover{ transform: none; }
     }
 
-    #top-controls .divider {
-      width: 2px;
-      height: 30px;
-      background-color: #888; /* more visible */
-      border-radius: 1px;
-    }
-
-    #top-controls button,
+    /* --- Select (sobre, cohérent ACS) --- */
     #top-controls select {
       margin: 0;
-      padding: 8px 14px;   /* larger button */
-      font-size: 15px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 10px;
+      background: #fff;
+      color: #222;
+      border: 1px solid #d8d8d8;
       cursor: pointer;
-      background-color: #f8f8f8;
-    }
+      box-shadow: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
 
-    #top-controls button:hover,
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image:
+        linear-gradient(135deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 100%); /* évite les styles natifs */
+    }
     #top-controls select:hover {
-      background-color: #eaeaea;
+      border-color: var(--acs-blue);
+      box-shadow: 0 0 0 3px rgba(17,167,221,0.12);
+    }
+    #top-controls select:focus-visible {
+      border-color: var(--acs-blue);
+      box-shadow: 0 0 0 3px rgba(17,167,221,0.25);
     }
 
     /* --- Title --- */
     #map-title {
       position: absolute;
-      top: 10px;
+      top: 4px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
-      background: rgba(255,255,255,0.8);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-weight: bold;
-      font-size: 16px;
+      background: rgba(255,255,255,0.9);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: clamp(18px, 2vw, 24px);
+      letter-spacing: 0.2px;
+      border: 1px solid rgba(0,0,0,0.06);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.10);
       text-align: center;
+      color: #222;
     }
 
     /* --- Search bar --- */
@@ -76,67 +147,31 @@
       z-index: 1000;
       background: rgba(255,255,255,0.95);
       padding: 6px 10px;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
-
-    #search-bar label {
-      font-weight: bold;
-    }
-
+    #search-bar label { font-weight: 600; font-size: 14px; }
     #search-bar input {
-      padding: 4px 8px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      min-width: 250px;
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; min-width: 250px; font-family: inherit;
     }
-
     #suggestions {
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      max-height: 150px;
-      overflow-y: auto;
-      display: none;
+      background: white; border: 1px solid #ccc; border-radius: 4px;
+      max-height: 150px; overflow-y: auto; display: none;
     }
-
-    #suggestions div {
-      padding: 4px 8px;
-      cursor: pointer;
-    }
-
-    #suggestions div:hover {
-      background-color: #eee;
-    }
-
-    #not-found {
-      color: red;
-      font-weight: bold;
-      margin-top: 2px;
-      display: none;
-    }
+    #suggestions div { padding: 6px 8px; cursor: pointer; }
+    #suggestions div:hover { background-color: #eee; }
+    #not-found { color: red; font-weight: 600; margin-top: 2px; display: none; }
 
     /* --- Help button --- */
     #help-button {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 8px 12px;
-      font-size: 14px;
-      cursor: pointer;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      position: absolute; bottom: 10px; right: 10px; z-index: 1000;
+      background: white; border: 1px solid #ccc; border-radius: 6px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-
-    #help-button:hover {
-      background-color: #f0f0f0;
-    }
+    #help-button:hover { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
@@ -159,12 +194,12 @@ if(!askPassword()) throw new Error("Access denied");
 <!-- Top controls (Caterers/Reps + Regions) -->
 <div id="top-controls">
   <div class="group">
-    <button onclick="loadType('Caterers')">Caterers</button>
-    <button onclick="loadType('Reps')">Reps</button>
+    <button type="button" onclick="loadType('Caterers')">Caterers</button>
+    <button type="button" onclick="loadType('Reps')">Reps</button>
   </div>
   <div class="divider"></div>
   <div class="group">
-    <button id="eu-btn">EU</button>
+    <button type="button" id="eu-btn">EU</button>
     <select id="eu-select" style="display:none;" onchange="flyToEU(this.value)">
       <option value="">Select a country</option>
       <option value="UK">UK</option>
@@ -172,8 +207,8 @@ if(!askPassword()) throw new Error("Access denied");
       <option value="Italy">Italy</option>
       <option value="Spain">Spain</option>
     </select>
-    <button onclick="flyToRegion('US')">US</button>
-    <button onclick="flyToRegion('APAC')">APAC</button>
+    <button type="button" onclick="flyToRegion('US')">US</button>
+    <button type="button" onclick="flyToRegion('APAC')">APAC</button>
   </div>
 </div>
 
